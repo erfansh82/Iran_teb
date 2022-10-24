@@ -1,0 +1,90 @@
+services:
+  rabbitmq:
+    container_name: rabbitmq
+    image: rabbitmq:latest
+    networks:
+      - main
+    ports:
+      - "5672:5672"
+    restart: always
+
+  redis:
+    container_name: redis
+    image: redis:latest
+    networks:
+      - main
+    ports:
+      - "6379:6379"
+    restart: always
+
+
+  postgres:
+    container_name: postgres
+    image: postgres:latest
+    environment:
+      - POSTGRES-DB=postgres
+      - POSTGRES-USER=postgres
+      # - POSTGRES-PASSWORD=postgres
+      - POSTGRES_HOST_AUTH_METHOD=trust
+    networks:
+      - main
+    ports:
+      - "5432:5432"
+    restart: always
+    volumes:
+      - postgres_data:/var/lib/postgresql/data
+
+
+  celery_worker:
+    container_name: celery_worker
+    command: "celery -A core worker -l INFO"
+    depends_on:
+      - app
+      - rabbitmq
+      - postgres
+    build: .
+    environment:
+      - C_FORCE_ROOT="true"
+    networks:
+      - main
+    restart: always
+
+
+  celery-beat:
+    container_name: celery_beat
+    build: .
+    command: celery -A core beat -l info
+    # environment:
+      # - DEBUG=1
+      # - SECRET_KEY=dbaa1_i7%*3r9-=z-+_mz4r-!qeed@(-a_r(g@k8jo8y3r27%m
+      # - DJANGO_ALLOWED_HOSTS=localhost 127.0.0.1 [::1]
+    depends_on:
+      - app
+      - rabbitmq
+      - postgres
+    networks:
+      - main
+    restart: always
+
+  app:
+    build: .
+    command: sh -c "python manage.py migrate && gunicorn core.wsgi -b 0.0.0.0:8000"
+    container_name: app
+    volumes:
+      - .:/code/
+    depends_on:
+      - postgres
+      - rabbitmq
+      - redis
+    networks:
+      - main
+    restart: always
+    ports:
+      - "8000:8000"
+
+
+networks:
+  main:
+
+volumes: 
+  postgres_data:
